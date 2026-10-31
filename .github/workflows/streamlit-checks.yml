@@ -20,5 +20,7 @@ jobs:
         run: python -m compileall -q app.py train_model.py pcos.py tests
       - name: Validate model artefacts and inference
         run: python tests/test_model_artifacts.py
+      - name: Generate refreshed PDF report
+        run: python tests/test_pdf_report.py
       - name: Launch app smoke test
         run: python tests/test_app_smoke.py
