@@ -10,15 +10,6 @@ import pandas as pd
 import streamlit as st
 from pcos_report import build_pdf, IMPORTANT
 
-from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import mm
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
-)
-
 BASE = Path(__file__).resolve().parent
 SYM_MODEL_PATH = BASE / "pcos_symptom_logistic_regression.joblib"
 ENH_MODEL_PATH = BASE / "pcos_enhanced_rbf_svm.joblib"
