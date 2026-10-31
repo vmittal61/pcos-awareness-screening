@@ -174,6 +174,11 @@ for index, (key, label, kind) in enumerate(QUESTIONS):
         answers[key] = st.selectbox(label, choices, index=0, key=state_key)
 
 unknown_count = sum(value == "Not sure" for value in answers.values())
+if unknown_count == 1:
+    st.info(
+        "One answer is marked “Not sure”. To keep the estimate as consistent as possible, "
+        "the remaining questions now require a Yes/No or Regular/Irregular response."
+    )
 
 st.markdown("---")
 st.markdown('<div class="kicker">Existing clinical reports</div>', unsafe_allow_html=True)
@@ -209,145 +214,175 @@ def encode_cycle(value):
 def safe_paragraph(text, style):
     return Paragraph(html.escape(str(text)), style)
 
-def make_pdf(score, model_name, symptom_rows, clinical_values, steps, uncertainty_note=""):
-    """Build a compact, single-page A4 summary."""
-    from reportlab.platypus import KeepInFrame
-
+def make_pdf(score, model_name, symptom_rows, clinical_values, steps, uncertainty_note):
     buffer = BytesIO()
     doc = SimpleDocTemplate(
-        buffer, pagesize=A4, rightMargin=14*mm, leftMargin=14*mm,
-        topMargin=10*mm, bottomMargin=12*mm
+        buffer, pagesize=A4, rightMargin=17*mm, leftMargin=17*mm,
+        topMargin=15*mm, bottomMargin=15*mm
     )
     styles = getSampleStyleSheet()
     ink = colors.HexColor("#263B35")
     teal = colors.HexColor("#1B6F5E")
     muted = colors.HexColor("#68776F")
     line = colors.HexColor("#D9DED3")
-    pale = colors.HexColor("#F0F4EC")
     rust = colors.HexColor("#B45C43")
+    pale = colors.HexColor("#F0F4EC")
 
     styles.add(ParagraphStyle(
-        name="RTitle", parent=styles["Title"], fontName="Helvetica-Bold",
-        fontSize=19, leading=21, textColor=teal, alignment=TA_LEFT, spaceAfter=2
+        name="ReportTitle", parent=styles["Title"], fontName="Helvetica-Bold",
+        fontSize=22, leading=27, textColor=teal, alignment=TA_LEFT, spaceAfter=5
     ))
     styles.add(ParagraphStyle(
-        name="REyebrow", parent=styles["Normal"], fontName="Helvetica-Bold",
-        fontSize=6.5, leading=8, textColor=teal, tracking=1.1, spaceAfter=3
+        name="Eyebrow", parent=styles["Normal"], fontName="Helvetica-Bold",
+        fontSize=7.5, leading=10, textColor=teal, tracking=1.5, spaceAfter=8
     ))
     styles.add(ParagraphStyle(
-        name="RHead", parent=styles["Heading2"], fontName="Helvetica-Bold",
-        fontSize=10, leading=12, textColor=teal, spaceBefore=6, spaceAfter=3
+        name="SectionHead", parent=styles["Heading2"], fontName="Helvetica-Bold",
+        fontSize=12, leading=15, textColor=teal, spaceBefore=12, spaceAfter=6
     ))
     styles.add(ParagraphStyle(
-        name="RBody", parent=styles["BodyText"], fontName="Helvetica",
-        fontSize=7.5, leading=9.2, textColor=ink, spaceAfter=1
+        name="BodySmall", parent=styles["BodyText"], fontName="Helvetica",
+        fontSize=8.6, leading=12, textColor=ink, spaceAfter=4
     ))
     styles.add(ParagraphStyle(
-        name="RMuted", parent=styles["BodyText"], fontName="Helvetica",
-        fontSize=6.5, leading=8, textColor=muted, spaceAfter=1
+        name="MutedSmall", parent=styles["BodyText"], fontName="Helvetica",
+        fontSize=7.5, leading=10, textColor=muted, spaceAfter=3
     ))
     styles.add(ParagraphStyle(
-        name="RScore", parent=styles["Title"], fontName="Helvetica-Bold",
-        fontSize=27, leading=29, textColor=ink, alignment=TA_LEFT
+        name="ScoreBig", parent=styles["Title"], fontName="Helvetica-Bold",
+        fontSize=31, leading=34, textColor=ink, alignment=TA_LEFT
+    ))
+    styles.add(ParagraphStyle(
+        name="Urgent", parent=styles["BodyText"], fontName="Helvetica-Bold",
+        fontSize=8.5, leading=12, textColor=ink
     ))
 
     story = [
-        Paragraph("PCOS AWARENESS · PERSONAL CHECK-IN", styles["REyebrow"]),
-        Paragraph("Your symptom summary", styles["RTitle"]),
-        Paragraph(f"{date.today():%d %B %Y}", styles["RMuted"]),
-        Paragraph("Symptoms you selected", styles["RHead"]),
+        Paragraph("PCOS AWARENESS  ·  PERSONAL CHECK-IN", styles["Eyebrow"]),
+        Paragraph("What you’ve noticed, written down.", styles["ReportTitle"]),
+        Paragraph(
+            f"Prepared {date.today():%d %B %Y} · A plain-language record for your own reference",
+            styles["MutedSmall"]
+        ),
+        Spacer(1, 5*mm),
+        Paragraph("What you told us", styles["SectionHead"]),
     ]
 
     symptom_data = []
     for label, answer in symptom_rows:
         symptom_data.append([
-            Paragraph(html.escape(str(label)), styles["RBody"]),
-            Paragraph(f"<b>{html.escape(str(answer))}</b>", styles["RBody"])
+            Paragraph(html.escape(label), styles["BodySmall"]),
+            Paragraph(html.escape(answer), styles["BodySmall"])
         ])
-    symptom_table = Table(symptom_data, colWidths=[112*mm, 54*mm], hAlign="LEFT")
+    symptom_table = Table(symptom_data, colWidths=[112*mm, 48*mm], hAlign="LEFT")
     symptom_table.setStyle(TableStyle([
         ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("LINEBELOW", (0,0), (-1,-1), .3, line),
+        ("LINEBELOW", (0,0), (-1,-1), .35, line),
         ("LEFTPADDING", (0,0), (-1,-1), 2),
-        ("RIGHTPADDING", (0,0), (-1,-1), 3),
-        ("TOPPADDING", (0,0), (-1,-1), 2),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+        ("RIGHTPADDING", (0,0), (-1,-1), 5),
+        ("TOPPADDING", (0,0), (-1,-1), 5),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
     ]))
     story.append(symptom_table)
 
-    story.extend([
-        Paragraph("Model result", styles["RHead"]),
-        Table(
-            [[Paragraph(f"{score*100:.1f}%", styles["RScore"]),
-              Paragraph(
-                  f"<b>{html.escape(str(model_name))}</b><br/>"
-                  "This is an experimental model score, not your chance of having PCOS. "
-                  "It cannot confirm or rule out PCOS; a clinician must assess your symptoms "
-                  "and any test results.",
-                  styles["RBody"]
-              )]],
-            colWidths=[43*mm, 123*mm],
-            style=TableStyle([
-                ("BACKGROUND", (0,0), (-1,-1), pale),
-                ("BOX", (0,0), (-1,-1), .5, line),
-                ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                ("LEFTPADDING", (0,0), (-1,-1), 7),
-                ("RIGHTPADDING", (0,0), (-1,-1), 7),
-                ("TOPPADDING", (0,0), (-1,-1), 6),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-            ])
-        )
-    ])
+    story.append(Paragraph("The experimental model score", styles["SectionHead"]))
+    score_text = Paragraph(f"{score*100:.1f}%", styles["ScoreBig"])
+    score_note = Paragraph(
+        "<b>This is not the chance that you have PCOS.</b> It is an uncalibrated output from an "
+        "experimental model. A higher score does not confirm PCOS, and a lower score does not rule it out. "
+        "Only a qualified healthcare professional can assess what is happening using your history, "
+        "examination and appropriate tests.",
+        styles["BodySmall"]
+    )
+    score_table = Table([[score_text, score_note]], colWidths=[48*mm, 112*mm])
+    score_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), pale),
+        ("BOX", (0,0), (-1,-1), .6, line),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0), (-1,-1), 9),
+        ("RIGHTPADDING", (0,0), (-1,-1), 9),
+        ("TOPPADDING", (0,0), (-1,-1), 9),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 9),
+    ]))
+    story.append(score_table)
+    story.append(Paragraph(f"Model used: {html.escape(model_name)}.", styles["MutedSmall"]))
+    if uncertainty_note:
+        story.append(Paragraph(html.escape(uncertainty_note), styles["MutedSmall"]))
 
-    # Show only values the user actually entered. No blank-field legend.
-    entered_values = [(label, value) for label, value in clinical_values
-                      if value and str(value).strip() not in ("—", "-")]
-    if entered_values:
-        story.append(Paragraph("Values you entered", styles["RHead"]))
-        value_cells = []
-        for label, value in entered_values:
-            value_cells.append(Paragraph(
-                f"<b>{html.escape(str(label))}</b>: {html.escape(str(value))}",
-                styles["RBody"]
-            ))
-        rows = [value_cells[i:i+3] for i in range(0, len(value_cells), 3)]
-        value_table = Table(rows, colWidths=[166*mm/3]*3, hAlign="LEFT")
-        value_table.setStyle(TableStyle([
+    story.append(Paragraph("Values from your reports", styles["SectionHead"]))
+    if clinical_values:
+        clinical_rows = []
+        for i in range(0, len(clinical_values), 2):
+            left_item = clinical_values[i]
+            right_item = clinical_values[i+1] if i+1 < len(clinical_values) else ("", "")
+            clinical_rows.append([
+                Paragraph(f"<b>{html.escape(left_item[0])}</b><br/>{html.escape(left_item[1])}", styles["BodySmall"]),
+                Paragraph(f"<b>{html.escape(right_item[0])}</b><br/>{html.escape(right_item[1])}", styles["BodySmall"])
+            ])
+        values_table = Table(clinical_rows, colWidths=[80*mm, 80*mm], hAlign="LEFT")
+        values_table.setStyle(TableStyle([
+            ("VALIGN", (0,0), (-1,-1), "TOP"),
+            ("LINEBELOW", (0,0), (-1,-1), .35, line),
+            ("LEFTPADDING", (0,0), (-1,-1), 3),
+            ("RIGHTPADDING", (0,0), (-1,-1), 5),
+            ("TOPPADDING", (0,0), (-1,-1), 5),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+        ]))
+        story.append(values_table)
+    else:
+        story.append(Paragraph("No clinical values were entered.", styles["BodySmall"]))
+    story.append(Paragraph(
+        "A dash means the field was left blank. Values are shown as entered; they have not been "
+        "interpreted against laboratory reference ranges.",
+        styles["MutedSmall"]
+    ))
+
+    story.append(Paragraph("What to do next", styles["SectionHead"]))
+    for number, step in enumerate(steps, 1):
+        number_cell = Paragraph(
+            f'<font color="#B65D43"><b>{number}</b></font>', styles["BodySmall"]
+        )
+        text_cell = Paragraph(html.escape(step), styles["BodySmall"])
+        row = Table([[number_cell, text_cell]], colWidths=[9*mm, 151*mm])
+        row.setStyle(TableStyle([
             ("VALIGN", (0,0), (-1,-1), "TOP"),
             ("LEFTPADDING", (0,0), (-1,-1), 2),
             ("RIGHTPADDING", (0,0), (-1,-1), 4),
-            ("TOPPADDING", (0,0), (-1,-1), 2),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+            ("TOPPADDING", (0,0), (-1,-1), 3),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
         ]))
-        story.append(value_table)
+        story.append(row)
 
-    story.append(Paragraph("What to do next", styles["RHead"]))
-    for number, step in enumerate(steps[:5], 1):
-        story.append(Table(
-            [[Paragraph(f"<b><font color='#B45C43'>{number}</font></b>", styles["RBody"]),
-              Paragraph(html.escape(str(step)), styles["RBody"])]],
-            colWidths=[7*mm, 159*mm],
-            style=TableStyle([
-                ("VALIGN", (0,0), (-1,-1), "TOP"),
-                ("LEFTPADDING", (0,0), (-1,-1), 1),
-                ("RIGHTPADDING", (0,0), (-1,-1), 2),
-                ("TOPPADDING", (0,0), (-1,-1), 1),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 1),
-            ])
-        ))
-
+    urgent = Table([[
+        Paragraph(
+            "<font color='#A94F39'><b>GET URGENT CARE if you have</b></font><br/>"
+            "Severe or sudden pelvic pain, fainting, very heavy bleeding, or feel acutely unwell.",
+            styles["Urgent"]
+        )
+    ]], colWidths=[160*mm])
+    urgent.setStyle(TableStyle([
+        ("BOX", (0,0), (-1,-1), .8, rust),
+        ("BACKGROUND", (0,0), (-1,-1), colors.HexColor("#F7F0E6")),
+        ("LEFTPADDING", (0,0), (-1,-1), 9),
+        ("RIGHTPADDING", (0,0), (-1,-1), 9),
+        ("TOPPADDING", (0,0), (-1,-1), 8),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+    ]))
+    story.extend([Spacer(1, 3*mm), urgent])
+    story.append(Paragraph("Important", styles["SectionHead"]))
     story.append(Paragraph(
-        "<b>Important:</b> This research prototype has not been clinically validated. "
-        "Do not use its score to diagnose or rule out PCOS, choose treatment, or delay care. "
-        "Seek urgent care for severe sudden pelvic pain, fainting, very heavy bleeding, "
-        "or feeling acutely unwell.",
-        styles["RMuted"]
+        "This research prototype has not been clinically or externally validated. The dataset’s "
+        "diagnosis-label process is not fully documented, and clinical fields may overlap with "
+        "criteria used to assign labels. Do not use this score to diagnose or rule out PCOS, choose "
+        "treatment, or delay care. Do not start hormones or supplements without medical advice.",
+        styles["MutedSmall"]
     ))
-
-    # Keep all content on exactly one A4 page; shrink slightly only if needed.
-    frame_height = A4[1] - 22*mm
-    one_page = KeepInFrame(166*mm, frame_height, story, mode="shrink", hAlign="LEFT", vAlign="TOP")
-    doc.build([one_page])
+    story.append(Spacer(1, 4*mm))
+    story.append(Paragraph(
+        "Educational research prototype · Not a diagnosis or medical advice",
+        styles["MutedSmall"]
+    ))
+    doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
 
@@ -452,6 +487,8 @@ if submitted:
         )
     else:
         st.caption("No clinical values were entered, so the symptom-only model was used.")
+    if uncertainty_note:
+        st.caption(uncertainty_note)
 
     st.subheader("What to do next")
     steps = []
@@ -509,18 +546,19 @@ if submitted:
         "or if you feel acutely unwell."
     )
 
-    clinical_values = [
-        (FEATURE_LABELS.get(feature, feature),
-         f"{value:g} {UNITS.get(feature, '')}".strip())
-        for feature, value in provided_clinical.items()
-    ]
+    clinical_values = []
+    for feature in CLINICAL_FEATURES:
+        value = provided_clinical.get(feature)
+        display_value = "—" if value is None else f"{value:g} {UNITS.get(feature, '')}".strip()
+        clinical_values.append((FEATURE_LABELS.get(feature, feature), display_value))
 
     pdf = make_pdf(
         score=score,
         model_name=model_name,
         symptom_rows=symptom_rows,
         clinical_values=clinical_values,
-        steps=steps
+        steps=steps,
+        uncertainty_note=uncertainty_note
     )
     st.markdown(
         '<div class="download-panel"><strong>Your summary is ready.</strong>'
