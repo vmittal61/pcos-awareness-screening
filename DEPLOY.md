@@ -7,7 +7,7 @@ The repository is structured for Streamlit Community Cloud.
 - Branch: `main`
 - Entrypoint: `app.py`
 - Dependency file: `requirements.txt`
-- Python: choose Python 3.11 in the Community Cloud deploy form.
+- Python: choose Python 3.12 in the Community Cloud deploy form.
 
 The app expects these files in the repository root:
 - `pcos_symptom_logistic_regression.joblib`
