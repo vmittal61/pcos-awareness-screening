@@ -1,6 +1,6 @@
 # PCOS: DATA ANALYSIS, MACHINE LEARNING & AWARENESS APPLICATION
 
-Data analysis and machine learning-based exploration of PCOS using Python, Scikit-Learn and XGBoost, extended into an interactive Streamlit application.
+An end-to-end PCOS data analysis and machine learning project with an interactive Streamlit awareness application.
 
 # Dataset Description
 
