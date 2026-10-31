@@ -63,3 +63,30 @@ Top predictive variables included:
 This project explored the relationship between clinical, hormonal and lifestyle factors and the occurrence of PCOS. Through Exploratory Data Analysis (EDA) and machine learning techniques, several important predictors of PCOS were identified.
 
 The results demonstrate how data-driven approaches can support the understanding of healthcare conditions and assist in predictive analysis.
+
+## PCOS Awareness Application
+
+The project was extended into an interactive Streamlit-based application designed to provide an educational pre-consultation overview of PCOS-related symptoms and available clinical report values.
+
+### Application Features
+
+- **Symptom Assessment:** Collects user-reported symptoms through an interactive questionnaire.
+- **Optional Clinical Inputs:** Allows users to enter available blood-test and ultrasound values.
+- **Conditional Model Selection:** Uses a symptom-based Logistic Regression model when only symptoms are provided and an RBF-SVM model when clinical inputs are supplied.
+- **Next-Step Guidance:** Presents general suggestions based on the information entered.
+- **PDF Summary:** Generates a downloadable summary of the submitted responses and experimental model output.
+
+### Technology Stack
+
+Python, Pandas, NumPy, Scikit-learn, Joblib, Streamlit and ReportLab.
+
+### Running the Application
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+### Important Disclaimer
+
+This application is an experimental educational research prototype. It has not been clinically validated and is not intended to diagnose PCOS, rule out the condition, or replace professional medical assessment. Its model output should not be interpreted as an individual's probability of having PCOS.
