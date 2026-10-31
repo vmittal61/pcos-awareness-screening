@@ -8,6 +8,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
+from pcos_report import build_pdf, IMPORTANT
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
@@ -214,178 +215,6 @@ def encode_cycle(value):
 def safe_paragraph(text, style):
     return Paragraph(html.escape(str(text)), style)
 
-def make_pdf(score, model_name, symptom_rows, clinical_values, steps, uncertainty_note):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer, pagesize=A4, rightMargin=17*mm, leftMargin=17*mm,
-        topMargin=15*mm, bottomMargin=15*mm
-    )
-    styles = getSampleStyleSheet()
-    ink = colors.HexColor("#263B35")
-    teal = colors.HexColor("#1B6F5E")
-    muted = colors.HexColor("#68776F")
-    line = colors.HexColor("#D9DED3")
-    rust = colors.HexColor("#B45C43")
-    pale = colors.HexColor("#F0F4EC")
-
-    styles.add(ParagraphStyle(
-        name="ReportTitle", parent=styles["Title"], fontName="Helvetica-Bold",
-        fontSize=22, leading=27, textColor=teal, alignment=TA_LEFT, spaceAfter=5
-    ))
-    styles.add(ParagraphStyle(
-        name="Eyebrow", parent=styles["Normal"], fontName="Helvetica-Bold",
-        fontSize=7.5, leading=10, textColor=teal, tracking=1.5, spaceAfter=8
-    ))
-    styles.add(ParagraphStyle(
-        name="SectionHead", parent=styles["Heading2"], fontName="Helvetica-Bold",
-        fontSize=12, leading=15, textColor=teal, spaceBefore=12, spaceAfter=6
-    ))
-    styles.add(ParagraphStyle(
-        name="BodySmall", parent=styles["BodyText"], fontName="Helvetica",
-        fontSize=8.6, leading=12, textColor=ink, spaceAfter=4
-    ))
-    styles.add(ParagraphStyle(
-        name="MutedSmall", parent=styles["BodyText"], fontName="Helvetica",
-        fontSize=7.5, leading=10, textColor=muted, spaceAfter=3
-    ))
-    styles.add(ParagraphStyle(
-        name="ScoreBig", parent=styles["Title"], fontName="Helvetica-Bold",
-        fontSize=31, leading=34, textColor=ink, alignment=TA_LEFT
-    ))
-    styles.add(ParagraphStyle(
-        name="Urgent", parent=styles["BodyText"], fontName="Helvetica-Bold",
-        fontSize=8.5, leading=12, textColor=ink
-    ))
-
-    story = [
-        Paragraph("PCOS AWARENESS  ·  PERSONAL CHECK-IN", styles["Eyebrow"]),
-        Paragraph("What you’ve noticed, written down.", styles["ReportTitle"]),
-        Paragraph(
-            f"Prepared {date.today():%d %B %Y} · A plain-language record for your own reference",
-            styles["MutedSmall"]
-        ),
-        Spacer(1, 5*mm),
-        Paragraph("What you told us", styles["SectionHead"]),
-    ]
-
-    symptom_data = []
-    for label, answer in symptom_rows:
-        symptom_data.append([
-            Paragraph(html.escape(label), styles["BodySmall"]),
-            Paragraph(html.escape(answer), styles["BodySmall"])
-        ])
-    symptom_table = Table(symptom_data, colWidths=[112*mm, 48*mm], hAlign="LEFT")
-    symptom_table.setStyle(TableStyle([
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("LINEBELOW", (0,0), (-1,-1), .35, line),
-        ("LEFTPADDING", (0,0), (-1,-1), 2),
-        ("RIGHTPADDING", (0,0), (-1,-1), 5),
-        ("TOPPADDING", (0,0), (-1,-1), 5),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
-    ]))
-    story.append(symptom_table)
-
-    story.append(Paragraph("The experimental model score", styles["SectionHead"]))
-    score_text = Paragraph(f"{score*100:.1f}%", styles["ScoreBig"])
-    score_note = Paragraph(
-        "<b>This is not the chance that you have PCOS.</b> It is an uncalibrated output from an "
-        "experimental model. A higher score does not confirm PCOS, and a lower score does not rule it out. "
-        "Only a qualified healthcare professional can assess what is happening using your history, "
-        "examination and appropriate tests.",
-        styles["BodySmall"]
-    )
-    score_table = Table([[score_text, score_note]], colWidths=[48*mm, 112*mm])
-    score_table.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,-1), pale),
-        ("BOX", (0,0), (-1,-1), .6, line),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("LEFTPADDING", (0,0), (-1,-1), 9),
-        ("RIGHTPADDING", (0,0), (-1,-1), 9),
-        ("TOPPADDING", (0,0), (-1,-1), 9),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 9),
-    ]))
-    story.append(score_table)
-    story.append(Paragraph(f"Model used: {html.escape(model_name)}.", styles["MutedSmall"]))
-    if uncertainty_note:
-        story.append(Paragraph(html.escape(uncertainty_note), styles["MutedSmall"]))
-
-    story.append(Paragraph("Values from your reports", styles["SectionHead"]))
-    if clinical_values:
-        clinical_rows = []
-        for i in range(0, len(clinical_values), 2):
-            left_item = clinical_values[i]
-            right_item = clinical_values[i+1] if i+1 < len(clinical_values) else ("", "")
-            clinical_rows.append([
-                Paragraph(f"<b>{html.escape(left_item[0])}</b><br/>{html.escape(left_item[1])}", styles["BodySmall"]),
-                Paragraph(f"<b>{html.escape(right_item[0])}</b><br/>{html.escape(right_item[1])}", styles["BodySmall"])
-            ])
-        values_table = Table(clinical_rows, colWidths=[80*mm, 80*mm], hAlign="LEFT")
-        values_table.setStyle(TableStyle([
-            ("VALIGN", (0,0), (-1,-1), "TOP"),
-            ("LINEBELOW", (0,0), (-1,-1), .35, line),
-            ("LEFTPADDING", (0,0), (-1,-1), 3),
-            ("RIGHTPADDING", (0,0), (-1,-1), 5),
-            ("TOPPADDING", (0,0), (-1,-1), 5),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
-        ]))
-        story.append(values_table)
-    else:
-        story.append(Paragraph("No clinical values were entered.", styles["BodySmall"]))
-    story.append(Paragraph(
-        "A dash means the field was left blank. Values are shown as entered; they have not been "
-        "interpreted against laboratory reference ranges.",
-        styles["MutedSmall"]
-    ))
-
-    story.append(Paragraph("What to do next", styles["SectionHead"]))
-    for number, step in enumerate(steps, 1):
-        number_cell = Paragraph(
-            f'<font color="#B65D43"><b>{number}</b></font>', styles["BodySmall"]
-        )
-        text_cell = Paragraph(html.escape(step), styles["BodySmall"])
-        row = Table([[number_cell, text_cell]], colWidths=[9*mm, 151*mm])
-        row.setStyle(TableStyle([
-            ("VALIGN", (0,0), (-1,-1), "TOP"),
-            ("LEFTPADDING", (0,0), (-1,-1), 2),
-            ("RIGHTPADDING", (0,0), (-1,-1), 4),
-            ("TOPPADDING", (0,0), (-1,-1), 3),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 3),
-        ]))
-        story.append(row)
-
-    urgent = Table([[
-        Paragraph(
-            "<font color='#A94F39'><b>GET URGENT CARE if you have</b></font><br/>"
-            "Severe or sudden pelvic pain, fainting, very heavy bleeding, or feel acutely unwell.",
-            styles["Urgent"]
-        )
-    ]], colWidths=[160*mm])
-    urgent.setStyle(TableStyle([
-        ("BOX", (0,0), (-1,-1), .8, rust),
-        ("BACKGROUND", (0,0), (-1,-1), colors.HexColor("#F7F0E6")),
-        ("LEFTPADDING", (0,0), (-1,-1), 9),
-        ("RIGHTPADDING", (0,0), (-1,-1), 9),
-        ("TOPPADDING", (0,0), (-1,-1), 8),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 8),
-    ]))
-    story.extend([Spacer(1, 3*mm), urgent])
-    story.append(Paragraph("Important", styles["SectionHead"]))
-    story.append(Paragraph(
-        "This research prototype has not been clinically or externally validated. The dataset’s "
-        "diagnosis-label process is not fully documented, and clinical fields may overlap with "
-        "criteria used to assign labels. Do not use this score to diagnose or rule out PCOS, choose "
-        "treatment, or delay care. Do not start hormones or supplements without medical advice.",
-        styles["MutedSmall"]
-    ))
-    story.append(Spacer(1, 4*mm))
-    story.append(Paragraph(
-        "Educational research prototype · Not a diagnosis or medical advice",
-        styles["MutedSmall"]
-    ))
-    doc.build(story)
-    buffer.seek(0)
-    return buffer.getvalue()
-
 if submitted:
     if not consent:
         st.error("Please confirm the educational-use notice before continuing.")
@@ -448,9 +277,7 @@ if submitted:
     else:
         score = float(model.predict_proba(row[features])[:, 1][0])
 
-    symptom_rows = [("Age", f"{float(age):g} years")]
-    for key, label, kind in QUESTIONS:
-        symptom_rows.append((label, answers[key]))
+    symptom_rows = [(label, answers[key]) for key, label, kind in QUESTIONS]
     positives = [key for key, _, _ in QUESTIONS if answers[key] in ("Yes", "Irregular")]
     irregular = answers["cycle"] == "Irregular"
 
@@ -546,20 +373,31 @@ if submitted:
         "or if you feel acutely unwell."
     )
 
-    clinical_values = []
-    for feature in CLINICAL_FEATURES:
-        value = provided_clinical.get(feature)
-        display_value = "—" if value is None else f"{value:g} {UNITS.get(feature, '')}".strip()
-        clinical_values.append((FEATURE_LABELS.get(feature, feature), display_value))
+    clinical_values = [
+        (
+            FEATURE_LABELS.get(feature, feature),
+            provided_clinical.get(feature),
+            UNITS.get(feature, "")
+        )
+        for feature in CLINICAL_FEATURES
+    ]
 
-    pdf = make_pdf(
-        score=score,
-        model_name=model_name,
-        symptom_rows=symptom_rows,
-        clinical_values=clinical_values,
-        steps=steps,
-        uncertainty_note=uncertainty_note
+    pdf_buffer = BytesIO()
+    build_pdf(
+        pdf_buffer,
+        {
+            "created": date.today(),
+            "age": f"{float(age):g}",
+            "score": score * 100,
+            "model_name": model_name,
+            "not_sure_count": unknown_count,
+            "symptoms": symptom_rows,
+            "clinical": clinical_values,
+            "steps": steps,
+            "important": IMPORTANT,
+        }
     )
+    pdf = pdf_buffer.getvalue()
     st.markdown(
         '<div class="download-panel"><strong>Your summary is ready.</strong>'
         '<p>Download a copy of your answers, model output and next steps for your own reference.</p></div>',
